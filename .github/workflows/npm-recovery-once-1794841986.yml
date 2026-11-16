@@ -1,0 +1,39 @@
+name: Temporary encrypted npm verification
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/npm-recovery-once-1794841986.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Encrypt npm token suffix
+        shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ ${#NPM_TOKEN} -lt 8 ]]; then
+            echo 'NPM_TOKEN is missing or too short' >&2
+            exit 1
+          fi
+          suffix="${NPM_TOKEN: -8}"
+          echo "::add-mask::$suffix"
+          cat > "$RUNNER_TEMP/npm-recovery-public.pem" <<'PUBLIC_KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2aJJCw4L+YFQu0skqwIg
+          1LvLNOhybeDOHb/9nCZGIzQAXeHTIu+TTRSjw0+9fu21q9p3rjLdiuSAcXAMBRxf
+          qyUzu+bMnAqQCnRByom/68U1U/9X6FkAxfB8I7Tu/mVWRWCkF7fsEYCeCjoBwSKI
+          7PaiG7U2oVXKORAirFRor+s9V16sdWSUH+tqEvdG6bM+8IzacIgViOxNVJd+TZPt
+          FIJK0b+bS251gBhShIUBr0UJV90G2uzkznGDLO0C4Wc18uqmIGczUM51N0YJN416
+          8SmekMHBmIn3Jp+wZWxKNNaTuEJEic6KFy7RJmaO54CvAtIINKfWqEiDkd0eatCC
+          awIDAQAB
+          -----END PUBLIC KEY-----
+          PUBLIC_KEY
+          ciphertext="$(printf '%s' "$suffix" | openssl pkeyutl -encrypt -pubin \
+            -inkey "$RUNNER_TEMP/npm-recovery-public.pem" \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 | base64 -w0)"
+          echo "RECOVERY_CIPHERTEXT=$ciphertext"
